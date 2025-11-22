@@ -375,8 +375,12 @@ light('Position', [1 1 1]);
 lighting gouraud;
 grid on;
 
-sgtitle(sprintf('KERS Flywheel Design - %s\nMass: %.2f kg, I: %.5f kg.m^2, Operating Speed: %.0f RPM', ...
-    materials{material_choice}, m_final, I_final, rpm_op), 'FontSize', 12, 'FontWeight', 'bold');
+% Add figure title (compatible with older MATLAB versions)
+annotation('textbox', [0.5, 0.95, 0, 0], 'String', ...
+    sprintf('KERS Flywheel Design - %s\nMass: %.2f kg, I: %.5f kg.m^2, Operating Speed: %.0f RPM', ...
+    materials{material_choice}, m_final, I_final, rpm_op), ...
+    'FontSize', 12, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', ...
+    'EdgeColor', 'none', 'FitBoxToText', 'on');
 
 %% Time-domain simulation plots
 
@@ -431,7 +435,10 @@ plot(0, v_initial*3.6, 'ko', 'MarkerSize', 8, 'MarkerFaceColor', 'k');
 plot(t_delivery, v_final_target*3.6, 'ro', 'MarkerSize', 8, 'MarkerFaceColor', 'r');
 legend('Velocity', 'Start', 'End', 'Location', 'southeast');
 
-sgtitle('KERS System Time-Domain Simulation', 'FontSize', 12, 'FontWeight', 'bold');
+% Add figure title
+annotation('textbox', [0.5, 0.95, 0, 0], 'String', 'KERS System Time-Domain Simulation', ...
+    'FontSize', 12, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', ...
+    'EdgeColor', 'none', 'FitBoxToText', 'on');
 
 %% Summary Output
 
