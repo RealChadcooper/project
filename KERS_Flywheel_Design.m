@@ -7,6 +7,19 @@
 
 clear; clc; close all;
 
+%% ========== USER INPUT - CHANGE MATERIAL HERE ==========
+% Select material by number:
+%   1 = Aluminum        (2712 kg/m^3,  $2.80/kg)
+%   2 = Brass 60/40     (8520 kg/m^3,  $5.00/kg)
+%   3 = Copper          (8940 kg/m^3, $11.00/kg)
+%   4 = Stainless Steel (7500 kg/m^3,  $4.00/kg)  <-- Good balance
+%   5 = Titanium        (4500 kg/m^3, $100.00/kg)
+%   6 = Zinc            (7135 kg/m^3, $13.00/kg)
+
+material_choice = 4;  % <--- CHANGE THIS NUMBER (1-6)
+
+% =========================================================
+
 %% Given Parameters and Constraints
 
 % Power requirements
@@ -26,18 +39,12 @@ r_max = D_max / 2;      % Maximum radius [m]
 % Initial velocity after braking
 v_initial = 80 / 3.6;   % Convert 80 km/h to m/s
 
-%% Material Selection
-% From Table 1 - choosing based on density and cost tradeoff
+%% Material Properties (from Table 1)
 
 materials = {'Aluminum', 'Brass 60/40', 'Copper', 'Stainless Steel', 'Titanium', 'Zinc'};
 densities = [2712, 8520, 8940, 7500, 4500, 7135];  % kg/m^3
 costs = [2.80, 5, 11, 4, 100, 13];  % $/kg
 
-% I'll use Stainless Steel - good balance of density (for energy storage)
-% and reasonable cost. Higher density = more mass = more energy storage
-% for same volume
-
-material_choice = 4;  % Stainless Steel
 rho = densities(material_choice);
 cost_per_kg = costs(material_choice);
 
