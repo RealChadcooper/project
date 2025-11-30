@@ -486,20 +486,29 @@ annotation('textbox', [0.3, 0.96, 0.4, 0.04], 'String', 'KERS System Time-Domain
 
 %% Summary Output
 
+% Calculate cost per velocity increase
+cost_per_velocity_increase = (m_final * cost_per_kg) / (delta_v_target * 3.6);
+
+fprintf('\n========================================\n');
+fprintf('        DESIGN SUMMARY TABLE            \n');
 fprintf('========================================\n');
-fprintf('        DESIGN SUMMARY                  \n');
-fprintf('========================================\n');
-fprintf('Material: %s\n', materials{material_choice});
-fprintf('Flywheel Diameter: %.2f in (%.1f mm)\n', 2*r_final/0.0254, 2*r_final*1000);
-fprintf('Flywheel Width: %.2f in (%.1f mm)\n', w_final/0.0254, w_final*1000);
-fprintf('Flywheel Mass: %.2f kg (%.2f lb)\n', m_final, m_final*2.205);
-fprintf('Moment of Inertia: %.6f kg.m^2\n', I_final);
-fprintf('Operating Speed: %.0f RPM\n', rpm_op);
-fprintf('Energy Stored: %.2f kJ\n', E_target/1000);
-fprintf('Spin-up Time: %.2f s\n', t_spinup);
-fprintf('Angular Momentum: %.2f kg.m^2/s\n', H);
-fprintf('Velocity Gain: %.1f km/h\n', delta_v_target*3.6);
-fprintf('Estimated Cost: $%.2f\n', m_final * cost_per_kg);
+fprintf('Material: %s\n\n', materials{material_choice});
+
+fprintf('%-30s | %-12s | %12s | %-10s\n', 'Parameter', 'Symbol', 'Value', 'Unit');
+fprintf('-------------------------------|--------------|--------------|------------\n');
+fprintf('%-30s | %-12s | %12.2f | %-10s\n', 'Energy Stored', 'E', E_target/1000, 'kJ');
+fprintf('%-30s | %-12s | %12.1f | %-10s\n', 'Operating Angular Velocity', 'ω', omega_op, 'rad/s');
+fprintf('%-30s | %-12s | %12.2f | %-10s\n', 'Outer Diameter', 'D', 2*r_final/0.0254, 'in');
+fprintf('%-30s | %-12s | %12.2f | %-10s\n', 'Disk Thickness', 'w', w_final/0.0254, 'in');
+fprintf('%-30s | %-12s | %12.2f | %-10s\n', 'Disk Mass', 'm', m_final, 'kg');
+fprintf('%-30s | %-12s | %12.6f | %-10s\n', 'Moment of Inertia', 'I', I_final, 'kg·m²');
+fprintf('%-30s | %-12s | %12.2f | %-10s\n', 'Angular Momentum', 'H', H, 'kg·m²/s');
+fprintf('%-30s | %-12s | %12.2f | %-10s\n', 'Angular Acceleration', 'α', alpha, 'rad/s²');
+fprintf('%-30s | %-12s | %12.2f | %-10s\n', 'Spin-up Time', 't', t_spinup, 's');
+fprintf('%-30s | %-12s | %12.0f | %-10s\n', 'Maximum Power', 'P_max', P_max/1000, 'kW');
+fprintf('%-30s | %-12s | %12.1f | %-10s\n', 'Vehicle Speed Gain', 'Δv', delta_v_target*3.6, 'km/h');
+fprintf('%-30s | %-12s | %12.2f | %-10s\n', 'Cost of the flywheel', 'Cost', m_final * cost_per_kg, '$');
+fprintf('%-30s | %-12s | %12.2f | %-10s\n', '$/Velocity increase', '$/Δv', cost_per_velocity_increase, '$/km/h');
 fprintf('========================================\n');
 
 %% Save figures
