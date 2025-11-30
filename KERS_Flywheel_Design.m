@@ -7,8 +7,12 @@
 
 clear; clc; close all;
 
-%% ========== USER INPUT - CHANGE MATERIAL HERE ==========
-% Select material by number:
+%% ========== USER INPUT - EVALUATION MODE ==========
+% Set to true to evaluate all materials and find the best one
+% Set to false to test a specific material
+evaluate_all_materials = true;  % <--- CHANGE THIS
+
+% If evaluate_all_materials = false, specify which material:
 %   1 = Aluminum        (2712 kg/m^3,  $2.80/kg)
 %   2 = Brass 60/40     (8520 kg/m^3,  $5.00/kg)
 %   3 = Copper          (8940 kg/m^3, $11.00/kg)
@@ -16,9 +20,9 @@ clear; clc; close all;
 %   5 = Titanium        (4500 kg/m^3, $100.00/kg)
 %   6 = Zinc            (7135 kg/m^3, $13.00/kg)
 
-material_choice = 4;  % <--- CHANGE THIS NUMBER (1-6)
+single_material_choice = 4;  % <--- Only used if evaluate_all_materials = false
 
-% =========================================================
+% ====================================================
 
 %% Given Parameters and Constraints
 
@@ -45,13 +49,19 @@ materials = {'Aluminum', 'Brass 60/40', 'Copper', 'Stainless Steel', 'Titanium',
 densities = [2712, 8520, 8940, 7500, 4500, 7135];  % kg/m^3
 costs = [2.80, 5, 11, 4, 100, 13];  % $/kg
 
-rho = densities(material_choice);
-cost_per_kg = costs(material_choice);
-
 fprintf('=== KERS FLYWHEEL DESIGN ===\n\n');
-fprintf('Selected Material: %s\n', materials{material_choice});
-fprintf('Density: %.0f kg/m^3\n', rho);
-fprintf('Cost: $%.2f/kg\n\n', cost_per_kg);
+
+% Determine which materials to evaluate
+if evaluate_all_materials
+    material_list = 1:6;
+    fprintf('Mode: Evaluating ALL materials to find optimal design\n\n');
+else
+    material_list = single_material_choice;
+    fprintf('Mode: Single material evaluation\n');
+    fprintf('Selected Material: %s\n', materials{single_material_choice});
+    fprintf('Density: %.0f kg/m^3\n', densities(single_material_choice));
+    fprintf('Cost: $%.2f/kg\n\n', costs(single_material_choice));
+end
 
 %% Part A: Calculate Moment of Inertia (Iterative Design)
 
@@ -65,75 +75,68 @@ fprintf('Minimum Energy: %.1f kJ\n', E_min/1000);
 fprintf('Maximum Energy: %.1f kJ\n', E_max/1000);
 fprintf('Target Energy: %.1f kJ\n\n', E_target/1000);
 
+% Global tracking across all materials (if evaluating multiple)
+global_best_score = -inf;
+global_best_material = 1;
+global_best_r = r_max;
+global_best_w = W_max;
+global_best_rpm = 0;
+global_best_omega = 0;
+material_comparison = [];  % Store results for each material
+
+% Practical design constraints (same for all materials)
+RPM_min = 20000;
+RPM_max = 50000;
+RPM_ideal = 35000;
+energy_tolerance = 0.05;
+
+% Loop through each material to evaluate
+for mat_idx = material_list
+
+    % Set material properties for this iteration
+    rho = densities(mat_idx);
+    cost_per_kg = costs(mat_idx);
+
+    fprintf('\n========================================\n');
+    fprintf('EVALUATING: %s\n', materials{mat_idx});
+    fprintf('Density: %.0f kg/m^3, Cost: $%.2f/kg\n', rho, cost_per_kg);
+    fprintf('========================================\n\n');
+
 % For a solid disk: I = (1/2) * m * r^2 = (1/2) * (rho * pi * r^2 * w) * r^2
 % I = (1/2) * rho * pi * r^4 * w
 
 % Energy stored: E = (1/2) * I * omega^2
 % So: E = (1/4) * rho * pi * r^4 * w * omega^2
 
-% Design iteration table
-fprintf('--- Design Iteration Process ---\n');
-fprintf('Iter | Radius(m) | Width(m)  | Mass(kg) | I(kg.m^2) | omega(rad/s) | RPM      | Energy(kJ) | Notes\n');
-fprintf('-----|-----------|-----------|----------|-----------|--------------|----------|------------|------------------\n');
+    % Design iteration table
+    fprintf('--- Design Iteration Process ---\n');
+    fprintf('Iter | Radius(m) | Width(m)  | Mass(kg) | I(kg.m^2) | omega(rad/s) | RPM      | Energy(kJ) | Notes\n');
+    fprintf('-----|-----------|-----------|----------|-----------|--------------|----------|------------|------------------\n');
 
-% Store iteration data
-iterations = [];
-iter = 0;
+    % Store iteration data
+    iterations = [];
+    iter = 0;
 
-% Practical design constraints
-RPM_min = 20000;  % Minimum practical RPM
-RPM_max = 50000;  % Maximum practical RPM for this application
-RPM_ideal = 35000;  % Ideal target RPM (good balance of energy and mechanical stress)
-energy_tolerance = 0.05;  % 5% tolerance on energy target
+    % Adaptive iteration loop
+    converged = false;
+    r = r_max;  % Start with maximum radius
+    w = W_max;  % Start with maximum width
 
-% Adaptive iteration loop
-converged = false;
-r = r_max;  % Start with maximum radius
-w = W_max;  % Start with maximum width
+    % Best design tracking for this material (initialize with impossible values)
+    best_score = -inf;
+    best_r = r_max;
+    best_w = W_max;
+    best_rpm = 0;
+    best_omega = 0;
 
-% Best design tracking (initialize with impossible values)
-best_score = -inf;
-best_r = r_max;
-best_w = W_max;
-best_rpm = 0;
-best_omega = 0;
-
-% Iteration 1: Baseline - max dimensions, check required RPM
-m = rho * pi * r^2 * w;
-I = 0.5 * m * r^2;
-omega = sqrt(2 * E_target / I);
-rpm = omega * 60 / (2*pi);
-E_stored = 0.5 * I * omega^2;
-
-% Score this design (human-like criteria)
-total_cost = m * cost_per_kg;
-score = evaluate_design(rpm, E_stored, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
-if score > best_score
-    best_score = score;
-    best_r = r;
-    best_w = w;
-    best_rpm = rpm;
-    best_omega = omega;
-end
-
-iter = iter + 1;
-fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Initial (max dims)\n', ...
-    iter, r, w, m, I, omega, rpm, E_stored/1000);
-iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
-
-% Adaptive iterations based on RPM constraints
-if rpm < RPM_min
-    % RPM too low - need smaller dimensions to increase required speed
-    fprintf('%79s\n', '└─> RPM too low, reducing dimensions...');
-    r = r_max * 0.8;
-    w = W_max * 0.8;
-
+    % Iteration 1: Baseline - max dimensions, check required RPM
     m = rho * pi * r^2 * w;
     I = 0.5 * m * r^2;
     omega = sqrt(2 * E_target / I);
     rpm = omega * 60 / (2*pi);
     E_stored = 0.5 * I * omega^2;
 
+    % Score this design (human-like criteria)
     total_cost = m * cost_per_kg;
     score = evaluate_design(rpm, E_stored, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
     if score > best_score
@@ -145,45 +148,16 @@ if rpm < RPM_min
     end
 
     iter = iter + 1;
-    fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced 20%%\n', ...
-        iter, r, w, m, I, omega, rpm, E_stored/1000);
-    iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
-end
-
-if rpm > RPM_max
-    % RPM too high - explore different dimension combinations
-    fprintf('%79s\n', '└─> RPM too high, exploring alternatives...');
-
-    % Try reducing width first (keeps larger radius for better energy storage)
-    r = r_max;
-    w = W_max * 0.7;
-
-    m = rho * pi * r^2 * w;
-    I = 0.5 * m * r^2;
-    omega = sqrt(2 * E_target / I);
-    rpm = omega * 60 / (2*pi);
-    E_stored = 0.5 * I * omega^2;
-
-    total_cost = m * cost_per_kg;
-    score = evaluate_design(rpm, E_stored, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
-    if score > best_score
-        best_score = score;
-        best_r = r;
-        best_w = w;
-        best_rpm = rpm;
-        best_omega = omega;
-    end
-
-    iter = iter + 1;
-    fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced width 30%%\n', ...
+    fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Initial (max dims)\n', ...
         iter, r, w, m, I, omega, rpm, E_stored/1000);
     iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
 
-    % If still too high, try smaller radius
-    if rpm > RPM_max
-        fprintf('%79s\n', '└─> Still too high, reducing radius...');
-        r = r_max * 0.75;
-        w = W_max;
+    % Adaptive iterations based on RPM constraints
+    if rpm < RPM_min
+        % RPM too low - need smaller dimensions to increase required speed
+        fprintf('%79s\n', '└─> RPM too low, reducing dimensions...');
+        r = r_max * 0.8;
+        w = W_max * 0.8;
 
         m = rho * pi * r^2 * w;
         I = 0.5 * m * r^2;
@@ -202,95 +176,194 @@ if rpm > RPM_max
         end
 
         iter = iter + 1;
-        fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced radius 25%%\n', ...
+        fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced 20%%\n', ...
             iter, r, w, m, I, omega, rpm, E_stored/1000);
         iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
     end
-end
 
-% Now explore fixed RPM approach - what energy can we get at ideal RPM?
-fprintf('%79s\n', '└─> Checking energy at ideal RPM...');
-r = r_max;
-w = W_max;
-m = rho * pi * r^2 * w;
-I = 0.5 * m * r^2;
-omega_target = RPM_ideal * 2 * pi / 60;
-E_at_ideal = 0.5 * I * omega_target^2;
+    if rpm > RPM_max
+        % RPM too high - explore different dimension combinations
+        fprintf('%79s\n', '└─> RPM too high, exploring alternatives...');
 
-total_cost = m * cost_per_kg;
-score = evaluate_design(RPM_ideal, E_at_ideal, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
-if score > best_score
-    best_score = score;
-    best_r = r;
-    best_w = w;
-    best_rpm = RPM_ideal;
-    best_omega = omega_target;
-end
+        % Try reducing width first (keeps larger radius for better energy storage)
+        r = r_max;
+        w = W_max * 0.7;
 
-iter = iter + 1;
-fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | At ideal RPM\n', ...
-    iter, r, w, m, I, omega_target, RPM_ideal, E_at_ideal/1000);
-iterations = [iterations; iter, r, w, m, I, omega_target, RPM_ideal, E_at_ideal];
+        m = rho * pi * r^2 * w;
+        I = 0.5 * m * r^2;
+        omega = sqrt(2 * E_target / I);
+        rpm = omega * 60 / (2*pi);
+        E_stored = 0.5 * I * omega^2;
 
-% Refine RPM to hit target energy
-if abs(E_at_ideal - E_target) / E_target > energy_tolerance
-    fprintf('%79s\n', '└─> Adjusting RPM for exact energy...');
-
-    % Calculate exact RPM needed
-    omega_exact = sqrt(2 * E_target / I);
-    rpm_exact = omega_exact * 60 / (2*pi);
-    E_exact = 0.5 * I * omega_exact^2;
-
-    % Check if this RPM is within practical range
-    if rpm_exact >= RPM_min && rpm_exact <= RPM_max
         total_cost = m * cost_per_kg;
-        score = evaluate_design(rpm_exact, E_exact, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
+        score = evaluate_design(rpm, E_stored, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
         if score > best_score
             best_score = score;
             best_r = r;
             best_w = w;
-            best_rpm = rpm_exact;
-            best_omega = omega_exact;
+            best_rpm = rpm;
+            best_omega = omega;
         end
 
         iter = iter + 1;
-        fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Exact for target E\n', ...
-            iter, r, w, m, I, omega_exact, rpm_exact, E_exact/1000);
-        iterations = [iterations; iter, r, w, m, I, omega_exact, rpm_exact, E_exact];
-        converged = true;
-    else
-        fprintf('%79s\n', '└─> Warning: Exact RPM outside practical range');
+        fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced width 30%%\n', ...
+            iter, r, w, m, I, omega, rpm, E_stored/1000);
+        iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
+
+        % If still too high, try smaller radius
+        if rpm > RPM_max
+            fprintf('%79s\n', '└─> Still too high, reducing radius...');
+            r = r_max * 0.75;
+            w = W_max;
+
+            m = rho * pi * r^2 * w;
+            I = 0.5 * m * r^2;
+            omega = sqrt(2 * E_target / I);
+            rpm = omega * 60 / (2*pi);
+            E_stored = 0.5 * I * omega^2;
+
+            total_cost = m * cost_per_kg;
+            score = evaluate_design(rpm, E_stored, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
+            if score > best_score
+                best_score = score;
+                best_r = r;
+                best_w = w;
+                best_rpm = rpm;
+                best_omega = omega;
+            end
+
+            iter = iter + 1;
+            fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced radius 25%%\n', ...
+                iter, r, w, m, I, omega, rpm, E_stored/1000);
+            iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
+        end
     end
-else
-    converged = true;
+
+    % Now explore fixed RPM approach - what energy can we get at ideal RPM?
+    fprintf('%79s\n', '└─> Checking energy at ideal RPM...');
+    r = r_max;
+    w = W_max;
+    m = rho * pi * r^2 * w;
+    I = 0.5 * m * r^2;
+    omega_target = RPM_ideal * 2 * pi / 60;
+    E_at_ideal = 0.5 * I * omega_target^2;
+
+    total_cost = m * cost_per_kg;
+    score = evaluate_design(RPM_ideal, E_at_ideal, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
+    if score > best_score
+        best_score = score;
+        best_r = r;
+        best_w = w;
+        best_rpm = RPM_ideal;
+        best_omega = omega_target;
+    end
+
+    iter = iter + 1;
+    fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | At ideal RPM\n', ...
+        iter, r, w, m, I, omega_target, RPM_ideal, E_at_ideal/1000);
+    iterations = [iterations; iter, r, w, m, I, omega_target, RPM_ideal, E_at_ideal];
+
+    % Refine RPM to hit target energy
+    if abs(E_at_ideal - E_target) / E_target > energy_tolerance
+        fprintf('%79s\n', '└─> Adjusting RPM for exact energy...');
+
+        % Calculate exact RPM needed
+        omega_exact = sqrt(2 * E_target / I);
+        rpm_exact = omega_exact * 60 / (2*pi);
+        E_exact = 0.5 * I * omega_exact^2;
+
+        % Check if this RPM is within practical range
+        if rpm_exact >= RPM_min && rpm_exact <= RPM_max
+            total_cost = m * cost_per_kg;
+            score = evaluate_design(rpm_exact, E_exact, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
+            if score > best_score
+                best_score = score;
+                best_r = r;
+                best_w = w;
+                best_rpm = rpm_exact;
+                best_omega = omega_exact;
+            end
+
+            iter = iter + 1;
+            fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Exact for target E\n', ...
+                iter, r, w, m, I, omega_exact, rpm_exact, E_exact/1000);
+            iterations = [iterations; iter, r, w, m, I, omega_exact, rpm_exact, E_exact];
+            converged = true;
+        else
+            fprintf('%79s\n', '└─> Warning: Exact RPM outside practical range');
+        end
+    else
+        converged = true;
+    end
+
+    % Final convergence check
+    if converged
+        fprintf('%79s\n', '└─> ✓ Design converged');
+    else
+        fprintf('%79s\n', '└─> ! Using best available configuration');
+    end
+
+    % Select the best design for this material
+    fprintf('%79s\n', sprintf('└─> Selected design: r=%.4fm, w=%.4fm, RPM=%.0f, Score=%.1f', best_r, best_w, best_rpm, best_score));
+    fprintf('\n');
+
+    % Store results for this material
+    material_mass = rho * pi * best_r^2 * best_w;
+    material_cost = material_mass * cost_per_kg;
+    material_comparison = [material_comparison; mat_idx, best_r, best_w, material_mass, best_rpm, material_cost, best_score];
+
+    % Update global best if this material is better
+    if best_score > global_best_score
+        global_best_score = best_score;
+        global_best_material = mat_idx;
+        global_best_r = best_r;
+        global_best_w = best_w;
+        global_best_rpm = best_rpm;
+        global_best_omega = best_omega;
+    end
+
+end  % End of material loop
+
+% Material comparison and final selection
+if evaluate_all_materials
+    fprintf('\n========================================\n');
+    fprintf('MATERIAL COMPARISON SUMMARY\n');
+    fprintf('========================================\n');
+    fprintf('Material         | Radius(m) | Width(m)  | Mass(kg) | RPM      | Cost($)  | Score\n');
+    fprintf('-----------------|-----------|-----------|----------|----------|----------|--------\n');
+    for i = 1:size(material_comparison, 1)
+        mat_num = material_comparison(i, 1);
+        fprintf('%-16s | %9.4f | %9.4f | %8.2f | %8.0f | %8.2f | %6.1f\n', ...
+            materials{mat_num}, material_comparison(i, 2), material_comparison(i, 3), ...
+            material_comparison(i, 4), material_comparison(i, 5), material_comparison(i, 6), ...
+            material_comparison(i, 7));
+    end
+    fprintf('\n');
+    fprintf('========================================\n');
+    fprintf('OPTIMAL MATERIAL SELECTED: %s\n', materials{global_best_material});
+    fprintf('========================================\n\n');
 end
 
-% Final convergence check
-if converged
-    fprintf('%79s\n', '└─> ✓ Design converged');
-else
-    fprintf('%79s\n', '└─> ! Using best available configuration');
-end
-
-% Select the best design from all iterations
-fprintf('%79s\n', sprintf('└─> Selected design: r=%.4fm, w=%.4fm, RPM=%.0f', best_r, best_w, best_rpm));
-fprintf('\n');
-
-% Final design parameters (using the BEST selected configuration)
-r_final = best_r;
-w_final = best_w;
+% Final design parameters (using the BEST selected configuration across all materials)
+material_choice = global_best_material;
+rho = densities(material_choice);
+cost_per_kg = costs(material_choice);
+r_final = global_best_r;
+w_final = global_best_w;
 m_final = rho * pi * r_final^2 * w_final;
 I_final = 0.5 * m_final * r_final^2;
-omega_op = best_omega;  % Operating angular velocity from selected design
-rpm_op = best_rpm;
+omega_op = global_best_omega;
+rpm_op = global_best_rpm;
 
 fprintf('--- FINAL DESIGN (Part A) ---\n');
+fprintf('Material: %s\n', materials{material_choice});
 fprintf('Flywheel Radius: %.4f m (%.2f in)\n', r_final, r_final/0.0254);
 fprintf('Flywheel Width: %.4f m (%.2f in)\n', w_final, w_final/0.0254);
 fprintf('Flywheel Mass: %.2f kg\n', m_final);
 fprintf('Moment of Inertia: %.6f kg.m^2\n', I_final);
 fprintf('Operating Speed: %.0f RPM (%.1f rad/s)\n', rpm_op, omega_op);
-fprintf('Energy Stored: %.2f kJ\n\n', E_target/1000);
+fprintf('Energy Stored: %.2f kJ\n', E_target/1000);
+fprintf('Total Cost: $%.2f\n\n', m_final * cost_per_kg);
 
 %% Part B: Spin-up Time Calculation
 
