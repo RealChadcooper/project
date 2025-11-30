@@ -73,16 +73,25 @@ fprintf('Target Energy: %.1f kJ\n\n', E_target/1000);
 
 % Design iteration table
 fprintf('--- Design Iteration Process ---\n');
-fprintf('Iter | Radius(m) | Width(m)  | Mass(kg) | I(kg.m^2) | omega(rad/s) | RPM      | Energy(kJ)\n');
-fprintf('-----|-----------|-----------|----------|-----------|--------------|----------|----------\n');
+fprintf('Iter | Radius(m) | Width(m)  | Mass(kg) | I(kg.m^2) | omega(rad/s) | RPM      | Energy(kJ) | Notes\n');
+fprintf('-----|-----------|-----------|----------|-----------|--------------|----------|------------|------------------\n');
 
 % Store iteration data
 iterations = [];
 iter = 0;
 
-% Iteration 1: Start with max dimensions, find required speed
-r = r_max;
-w = W_max;
+% Practical design constraints
+RPM_min = 20000;  % Minimum practical RPM
+RPM_max = 50000;  % Maximum practical RPM for this application
+RPM_ideal = 35000;  % Ideal target RPM (good balance of energy and mechanical stress)
+energy_tolerance = 0.05;  % 5% tolerance on energy target
+
+% Adaptive iteration loop
+converged = false;
+r = r_max;  % Start with maximum radius
+w = W_max;  % Start with maximum width
+
+% Iteration 1: Baseline - max dimensions, check required RPM
 m = rho * pi * r^2 * w;
 I = 0.5 * m * r^2;
 omega = sqrt(2 * E_target / I);
@@ -90,80 +99,110 @@ rpm = omega * 60 / (2*pi);
 E_stored = 0.5 * I * omega^2;
 
 iter = iter + 1;
-fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f\n', ...
+fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Initial (max dims)\n', ...
     iter, r, w, m, I, omega, rpm, E_stored/1000);
 iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
 
-% Iteration 2: RPM is very high, let's try reducing width to increase speed capability
-% and check if we need to adjust
+% Adaptive iterations based on RPM constraints
+if rpm < RPM_min
+    % RPM too low - need smaller dimensions to increase required speed
+    fprintf('%79s\n', '└─> RPM too low, reducing dimensions...');
+    r = r_max * 0.8;
+    w = W_max * 0.8;
+
+    m = rho * pi * r^2 * w;
+    I = 0.5 * m * r^2;
+    omega = sqrt(2 * E_target / I);
+    rpm = omega * 60 / (2*pi);
+    E_stored = 0.5 * I * omega^2;
+
+    iter = iter + 1;
+    fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced 20%%\n', ...
+        iter, r, w, m, I, omega, rpm, E_stored/1000);
+    iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
+end
+
+if rpm > RPM_max
+    % RPM too high - explore different dimension combinations
+    fprintf('%79s\n', '└─> RPM too high, exploring alternatives...');
+
+    % Try reducing width first (keeps larger radius for better energy storage)
+    r = r_max;
+    w = W_max * 0.7;
+
+    m = rho * pi * r^2 * w;
+    I = 0.5 * m * r^2;
+    omega = sqrt(2 * E_target / I);
+    rpm = omega * 60 / (2*pi);
+    E_stored = 0.5 * I * omega^2;
+
+    iter = iter + 1;
+    fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced width 30%%\n', ...
+        iter, r, w, m, I, omega, rpm, E_stored/1000);
+    iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
+
+    % If still too high, try smaller radius
+    if rpm > RPM_max
+        fprintf('%79s\n', '└─> Still too high, reducing radius...');
+        r = r_max * 0.75;
+        w = W_max;
+
+        m = rho * pi * r^2 * w;
+        I = 0.5 * m * r^2;
+        omega = sqrt(2 * E_target / I);
+        rpm = omega * 60 / (2*pi);
+        E_stored = 0.5 * I * omega^2;
+
+        iter = iter + 1;
+        fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced radius 25%%\n', ...
+            iter, r, w, m, I, omega, rpm, E_stored/1000);
+        iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
+    end
+end
+
+% Now explore fixed RPM approach - what energy can we get at ideal RPM?
+fprintf('%79s\n', '└─> Checking energy at ideal RPM...');
 r = r_max;
-w = 0.08;  % 80mm width
-m = rho * pi * r^2 * w;
-I = 0.5 * m * r^2;
-omega = sqrt(2 * E_target / I);
-rpm = omega * 60 / (2*pi);
-E_stored = 0.5 * I * omega^2;
-
-iter = iter + 1;
-fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f\n', ...
-    iter, r, w, m, I, omega, rpm, E_stored/1000);
-iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
-
-% Iteration 3: Still high RPM, try smaller radius
-r = 0.10;  % 100mm radius
 w = W_max;
 m = rho * pi * r^2 * w;
 I = 0.5 * m * r^2;
-omega = sqrt(2 * E_target / I);
-rpm = omega * 60 / (2*pi);
-E_stored = 0.5 * I * omega^2;
+omega_target = RPM_ideal * 2 * pi / 60;
+E_at_ideal = 0.5 * I * omega_target^2;
 
 iter = iter + 1;
-fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f\n', ...
-    iter, r, w, m, I, omega, rpm, E_stored/1000);
-iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored];
+fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | At ideal RPM\n', ...
+    iter, r, w, m, I, omega_target, RPM_ideal, E_at_ideal/1000);
+iterations = [iterations; iter, r, w, m, I, omega_target, RPM_ideal, E_at_ideal];
 
-% Iteration 4: Max dimensions with practical RPM target around 40000-50000
-% Let's target 45000 RPM and see what energy we get
-r = r_max;
-w = W_max;
-m = rho * pi * r^2 * w;
-I = 0.5 * m * r^2;
-omega_target = 45000 * 2 * pi / 60;  % Target 45000 RPM
-E_at_target = 0.5 * I * omega_target^2;
+% Refine RPM to hit target energy
+if abs(E_at_ideal - E_target) / E_target > energy_tolerance
+    fprintf('%79s\n', '└─> Adjusting RPM for exact energy...');
 
-iter = iter + 1;
-fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f\n', ...
-    iter, r, w, m, I, omega_target, 45000, E_at_target/1000);
-iterations = [iterations; iter, r, w, m, I, omega_target, 45000, E_at_target];
+    % Calculate exact RPM needed
+    omega_exact = sqrt(2 * E_target / I);
+    rpm_exact = omega_exact * 60 / (2*pi);
+    E_exact = 0.5 * I * omega_exact^2;
 
-% Iteration 5: Energy is too high at 45000 RPM, reduce speed
-omega_target = 35000 * 2 * pi / 60;
-E_at_target = 0.5 * I * omega_target^2;
+    % Check if this RPM is within practical range
+    if rpm_exact >= RPM_min && rpm_exact <= RPM_max
+        iter = iter + 1;
+        fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Exact for target E\n', ...
+            iter, r, w, m, I, omega_exact, rpm_exact, E_exact/1000);
+        iterations = [iterations; iter, r, w, m, I, omega_exact, rpm_exact, E_exact];
+        converged = true;
+    else
+        fprintf('%79s\n', '└─> Warning: Exact RPM outside practical range');
+    end
+else
+    converged = true;
+end
 
-iter = iter + 1;
-fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f\n', ...
-    iter, r, w, m, I, omega_target, 35000, E_at_target/1000);
-iterations = [iterations; iter, r, w, m, I, omega_target, 35000, E_at_target];
-
-% Iteration 6: Getting closer, fine tune
-omega_target = 30000 * 2 * pi / 60;
-E_at_target = 0.5 * I * omega_target^2;
-
-iter = iter + 1;
-fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f\n', ...
-    iter, r, w, m, I, omega_target, 30000, E_at_target/1000);
-iterations = [iterations; iter, r, w, m, I, omega_target, 30000, E_at_target];
-
-% Iteration 7: Let's find exact RPM needed for target energy
-omega_final = sqrt(2 * E_target / I);
-rpm_final = omega_final * 60 / (2*pi);
-E_final = 0.5 * I * omega_final^2;
-
-iter = iter + 1;
-fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f\n', ...
-    iter, r, w, m, I, omega_final, rpm_final, E_final/1000);
-iterations = [iterations; iter, r, w, m, I, omega_final, rpm_final, E_final];
+% Final convergence check
+if converged
+    fprintf('%79s\n', '└─> ✓ Design converged');
+else
+    fprintf('%79s\n', '└─> ! Using best available configuration');
+end
 
 fprintf('\n');
 
