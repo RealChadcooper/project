@@ -91,12 +91,29 @@ converged = false;
 r = r_max;  % Start with maximum radius
 w = W_max;  % Start with maximum width
 
+% Best design tracking (initialize with impossible values)
+best_score = -inf;
+best_r = r_max;
+best_w = W_max;
+best_rpm = 0;
+best_omega = 0;
+
 % Iteration 1: Baseline - max dimensions, check required RPM
 m = rho * pi * r^2 * w;
 I = 0.5 * m * r^2;
 omega = sqrt(2 * E_target / I);
 rpm = omega * 60 / (2*pi);
 E_stored = 0.5 * I * omega^2;
+
+% Score this design (human-like criteria)
+score = evaluate_design(rpm, E_stored, E_target, m, RPM_min, RPM_max, RPM_ideal);
+if score > best_score
+    best_score = score;
+    best_r = r;
+    best_w = w;
+    best_rpm = rpm;
+    best_omega = omega;
+end
 
 iter = iter + 1;
 fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Initial (max dims)\n', ...
@@ -115,6 +132,15 @@ if rpm < RPM_min
     omega = sqrt(2 * E_target / I);
     rpm = omega * 60 / (2*pi);
     E_stored = 0.5 * I * omega^2;
+
+    score = evaluate_design(rpm, E_stored, E_target, m, RPM_min, RPM_max, RPM_ideal);
+    if score > best_score
+        best_score = score;
+        best_r = r;
+        best_w = w;
+        best_rpm = rpm;
+        best_omega = omega;
+    end
 
     iter = iter + 1;
     fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced 20%%\n', ...
@@ -136,6 +162,15 @@ if rpm > RPM_max
     rpm = omega * 60 / (2*pi);
     E_stored = 0.5 * I * omega^2;
 
+    score = evaluate_design(rpm, E_stored, E_target, m, RPM_min, RPM_max, RPM_ideal);
+    if score > best_score
+        best_score = score;
+        best_r = r;
+        best_w = w;
+        best_rpm = rpm;
+        best_omega = omega;
+    end
+
     iter = iter + 1;
     fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced width 30%%\n', ...
         iter, r, w, m, I, omega, rpm, E_stored/1000);
@@ -153,6 +188,15 @@ if rpm > RPM_max
         rpm = omega * 60 / (2*pi);
         E_stored = 0.5 * I * omega^2;
 
+        score = evaluate_design(rpm, E_stored, E_target, m, RPM_min, RPM_max, RPM_ideal);
+        if score > best_score
+            best_score = score;
+            best_r = r;
+            best_w = w;
+            best_rpm = rpm;
+            best_omega = omega;
+        end
+
         iter = iter + 1;
         fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Reduced radius 25%%\n', ...
             iter, r, w, m, I, omega, rpm, E_stored/1000);
@@ -168,6 +212,15 @@ m = rho * pi * r^2 * w;
 I = 0.5 * m * r^2;
 omega_target = RPM_ideal * 2 * pi / 60;
 E_at_ideal = 0.5 * I * omega_target^2;
+
+score = evaluate_design(RPM_ideal, E_at_ideal, E_target, m, RPM_min, RPM_max, RPM_ideal);
+if score > best_score
+    best_score = score;
+    best_r = r;
+    best_w = w;
+    best_rpm = RPM_ideal;
+    best_omega = omega_target;
+end
 
 iter = iter + 1;
 fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | At ideal RPM\n', ...
@@ -185,6 +238,15 @@ if abs(E_at_ideal - E_target) / E_target > energy_tolerance
 
     % Check if this RPM is within practical range
     if rpm_exact >= RPM_min && rpm_exact <= RPM_max
+        score = evaluate_design(rpm_exact, E_exact, E_target, m, RPM_min, RPM_max, RPM_ideal);
+        if score > best_score
+            best_score = score;
+            best_r = r;
+            best_w = w;
+            best_rpm = rpm_exact;
+            best_omega = omega_exact;
+        end
+
         iter = iter + 1;
         fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | Exact for target E\n', ...
             iter, r, w, m, I, omega_exact, rpm_exact, E_exact/1000);
@@ -204,15 +266,17 @@ else
     fprintf('%79s\n', '└─> ! Using best available configuration');
 end
 
+% Select the best design from all iterations
+fprintf('%79s\n', sprintf('└─> Selected design: r=%.4fm, w=%.4fm, RPM=%.0f', best_r, best_w, best_rpm));
 fprintf('\n');
 
-% Final design parameters
-r_final = r_max;
-w_final = W_max;
+% Final design parameters (using the BEST selected configuration)
+r_final = best_r;
+w_final = best_w;
 m_final = rho * pi * r_final^2 * w_final;
 I_final = 0.5 * m_final * r_final^2;
-omega_op = sqrt(2 * E_target / I_final);  % Operating angular velocity
-rpm_op = omega_op * 60 / (2*pi);
+omega_op = best_omega;  % Operating angular velocity from selected design
+rpm_op = best_rpm;
 
 fprintf('--- FINAL DESIGN (Part A) ---\n');
 fprintf('Flywheel Radius: %.4f m (%.2f in)\n', r_final, r_final/0.0254);
@@ -508,3 +572,36 @@ fprintf('========================================\n');
 saveas(figure(1), 'Flywheel_Design_Drawing.png');
 saveas(figure(2), 'KERS_Simulation.png');
 fprintf('\nFigures saved to current directory.\n');
+
+%% Helper Functions
+
+% Design evaluation function - scores designs based on engineering criteria
+function score = evaluate_design(rpm, E_stored, E_target, mass, RPM_min, RPM_max, RPM_ideal)
+    % Initialize score
+    score = 0;
+
+    % Criterion 1: RPM must be within practical range (hard constraint)
+    if rpm < RPM_min || rpm > RPM_max
+        score = score - 1000;  % Heavy penalty for being outside range
+    else
+        % Bonus for being close to ideal RPM
+        rpm_deviation = abs(rpm - RPM_ideal) / RPM_ideal;
+        score = score + (1 - rpm_deviation) * 100;  % Max 100 points
+    end
+
+    % Criterion 2: Energy should meet target (important)
+    energy_error = abs(E_stored - E_target) / E_target;
+    if energy_error < 0.05
+        score = score + 50;  % Within 5% tolerance
+    end
+    score = score - energy_error * 20;  % Penalty for energy mismatch
+
+    % Criterion 3: Prefer lighter designs (minimize mass)
+    % Normalize mass penalty (typical masses are 3-10 kg)
+    mass_penalty = (mass - 3) * 2;  % Penalize heavier designs
+    score = score - mass_penalty;
+
+    % Criterion 4: Prefer designs closer to max dimensions (more robust)
+    % This is a minor factor, already captured in mass
+
+end
