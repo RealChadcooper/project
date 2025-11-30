@@ -170,47 +170,94 @@ for mat_idx = material_list
 
     fprintf('\n');
 
-    % For comparison table, use iteration 1 (max dimensions) for this material
-    material_comparison = [material_comparison; mat_idx, iterations(1,2), iterations(1,3), iterations(1,4), iterations(1,7), iterations(1,9)];
+    % Store all iteration data for optimization
+    % Columns: [mat_idx, iter_num, r, w, m, I, omega, rpm, E, cost]
+    for i = 1:size(iterations, 1)
+        material_comparison = [material_comparison; mat_idx, iterations(i,1), iterations(i,2), iterations(i,3), ...
+                              iterations(i,4), iterations(i,5), iterations(i,6), iterations(i,7), iterations(i,8), iterations(i,9)];
+    end
 
 end  % End of material loop
 
-% Material comparison and final selection
+% Optimal design selection (without made-up numbers)
 if evaluate_all_materials
     fprintf('\n========================================\n');
-    fprintf('MATERIAL COMPARISON SUMMARY\n');
+    fprintf('OPTIMAL DESIGN SELECTION\n');
     fprintf('========================================\n');
-    fprintf('Material         | Radius(m) | Width(m)  | Mass(kg) | RPM      | Cost($)\n');
-    fprintf('-----------------|-----------|-----------|----------|----------|--------\n');
-    for i = 1:size(material_comparison, 1)
-        mat_num = material_comparison(i, 1);
-        fprintf('%-16s | %9.4f | %9.4f | %8.2f | %8.0f | %7.2f\n', ...
-            materials{mat_num}, material_comparison(i, 2), material_comparison(i, 3), ...
-            material_comparison(i, 4), material_comparison(i, 5), material_comparison(i, 6));
-    end
-    fprintf('\n');
-    fprintf('========================================\n');
-    fprintf('SELECT YOUR MATERIAL based on the comparison above\n');
-    fprintf('Consider: Cost, RPM feasibility, mass\n');
-    fprintf('========================================\n\n');
+    fprintf('Scoring based on three real project objectives:\n');
+    fprintf('  1. Minimize Cost (project requirement)\n');
+    fprintf('  2. Minimize RPM (practical safety/feasibility)\n');
+    fprintf('  3. Minimize Mass (automotive application)\n');
+    fprintf('Each metric normalized 0-100, equal weight (1/3 each)\n\n');
 
-    % For now, use stainless steel (good balance) as default
-    material_choice = 4;  % Stainless Steel
+    % Extract metrics for all designs
+    all_costs = material_comparison(:, 10);
+    all_rpms = material_comparison(:, 8);
+    all_masses = material_comparison(:, 5);
+
+    % Normalize metrics to 0-100 scale (lower is better for all)
+    % Score = 100 * (max - value) / (max - min)
+    % This gives 100 to best (lowest) and 0 to worst (highest)
+    cost_scores = 100 * (max(all_costs) - all_costs) / (max(all_costs) - min(all_costs));
+    rpm_scores = 100 * (max(all_rpms) - all_rpms) / (max(all_rpms) - min(all_rpms));
+    mass_scores = 100 * (max(all_masses) - all_masses) / (max(all_masses) - min(all_masses));
+
+    % Combined score (equal weights - no arbitrary bias)
+    combined_scores = (cost_scores + rpm_scores + mass_scores) / 3;
+
+    % Find optimal design
+    [best_score, best_idx] = max(combined_scores);
+
+    % Extract optimal design parameters
+    material_choice = material_comparison(best_idx, 1);
+    iter_choice = material_comparison(best_idx, 2);
+    r_final = material_comparison(best_idx, 3);
+    w_final = material_comparison(best_idx, 4);
+    m_final = material_comparison(best_idx, 5);
+    I_final = material_comparison(best_idx, 6);
+    omega_op = material_comparison(best_idx, 7);
+    rpm_op = material_comparison(best_idx, 8);
+
+    % Show top 5 designs
+    [sorted_scores, sorted_idx] = sort(combined_scores, 'descend');
+    fprintf('Top 5 Design Options:\n');
+    fprintf('Rank | Material         | Iter | Mass(kg) | RPM      | Cost($) | Score\n');
+    fprintf('-----|------------------|------|----------|----------|---------|-------\n');
+    for i = 1:min(5, length(sorted_scores))
+        idx = sorted_idx(i);
+        mat_num = material_comparison(idx, 1);
+        iter_num = material_comparison(idx, 2);
+        fprintf('%4d | %-16s | %4d | %8.2f | %8.0f | %7.2f | %6.1f\n', ...
+            i, materials{mat_num}, iter_num, material_comparison(idx, 5), ...
+            material_comparison(idx, 8), material_comparison(idx, 10), combined_scores(idx));
+    end
+
+    fprintf('\n--- OPTIMAL DESIGN SELECTED ---\n');
+    fprintf('Material: %s, Iteration: %d\n', materials{material_choice}, iter_choice);
+    fprintf('Score Breakdown: Cost=%.1f, RPM=%.1f, Mass=%.1f → Combined=%.1f\n', ...
+        cost_scores(best_idx), rpm_scores(best_idx), mass_scores(best_idx), best_score);
+    fprintf('========================================\n\n');
 else
     material_choice = single_material_choice;
+    % Use iteration 1 (max dimensions) for single material mode
+    r_final = r_max;
+    w_final = W_max;
+    rho = densities(material_choice);
+    cost_per_kg = costs(material_choice);
+    m_final = rho * pi * r_final^2 * w_final;
+    I_final = 0.5 * m_final * r_final^2;
+    omega_op = sqrt(2 * E_target / I_final);
+    rpm_op = omega_op * 60 / (2*pi);
 end
 
-% Final design parameters (using selected material)
+% Set final material properties
 rho = densities(material_choice);
 cost_per_kg = costs(material_choice);
-r_final = r_max;
-w_final = W_max;
-m_final = rho * pi * r_final^2 * w_final;
-I_final = 0.5 * m_final * r_final^2;
-omega_op = sqrt(2 * E_target / I_final);
-rpm_op = omega_op * 60 / (2*pi);
 
 fprintf('--- FINAL DESIGN (Part A) ---\n');
+if evaluate_all_materials
+    fprintf('AUTOMATICALLY SELECTED based on optimal scoring\n');
+end
 fprintf('Material: %s\n', materials{material_choice});
 fprintf('Flywheel Radius: %.4f m (%.2f in)\n', r_final, r_final/0.0254);
 fprintf('Flywheel Width: %.4f m (%.2f in)\n', w_final, w_final/0.0254);
