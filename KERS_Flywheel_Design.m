@@ -106,7 +106,8 @@ rpm = omega * 60 / (2*pi);
 E_stored = 0.5 * I * omega^2;
 
 % Score this design (human-like criteria)
-score = evaluate_design(rpm, E_stored, E_target, m, RPM_min, RPM_max, RPM_ideal);
+total_cost = m * cost_per_kg;
+score = evaluate_design(rpm, E_stored, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
 if score > best_score
     best_score = score;
     best_r = r;
@@ -133,7 +134,8 @@ if rpm < RPM_min
     rpm = omega * 60 / (2*pi);
     E_stored = 0.5 * I * omega^2;
 
-    score = evaluate_design(rpm, E_stored, E_target, m, RPM_min, RPM_max, RPM_ideal);
+    total_cost = m * cost_per_kg;
+    score = evaluate_design(rpm, E_stored, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
     if score > best_score
         best_score = score;
         best_r = r;
@@ -162,7 +164,8 @@ if rpm > RPM_max
     rpm = omega * 60 / (2*pi);
     E_stored = 0.5 * I * omega^2;
 
-    score = evaluate_design(rpm, E_stored, E_target, m, RPM_min, RPM_max, RPM_ideal);
+    total_cost = m * cost_per_kg;
+    score = evaluate_design(rpm, E_stored, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
     if score > best_score
         best_score = score;
         best_r = r;
@@ -188,7 +191,8 @@ if rpm > RPM_max
         rpm = omega * 60 / (2*pi);
         E_stored = 0.5 * I * omega^2;
 
-        score = evaluate_design(rpm, E_stored, E_target, m, RPM_min, RPM_max, RPM_ideal);
+        total_cost = m * cost_per_kg;
+        score = evaluate_design(rpm, E_stored, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
         if score > best_score
             best_score = score;
             best_r = r;
@@ -213,7 +217,8 @@ I = 0.5 * m * r^2;
 omega_target = RPM_ideal * 2 * pi / 60;
 E_at_ideal = 0.5 * I * omega_target^2;
 
-score = evaluate_design(RPM_ideal, E_at_ideal, E_target, m, RPM_min, RPM_max, RPM_ideal);
+total_cost = m * cost_per_kg;
+score = evaluate_design(RPM_ideal, E_at_ideal, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
 if score > best_score
     best_score = score;
     best_r = r;
@@ -238,7 +243,8 @@ if abs(E_at_ideal - E_target) / E_target > energy_tolerance
 
     % Check if this RPM is within practical range
     if rpm_exact >= RPM_min && rpm_exact <= RPM_max
-        score = evaluate_design(rpm_exact, E_exact, E_target, m, RPM_min, RPM_max, RPM_ideal);
+        total_cost = m * cost_per_kg;
+        score = evaluate_design(rpm_exact, E_exact, E_target, m, total_cost, RPM_min, RPM_max, RPM_ideal);
         if score > best_score
             best_score = score;
             best_r = r;
@@ -576,7 +582,7 @@ fprintf('\nFigures saved to current directory.\n');
 %% Helper Functions
 
 % Design evaluation function - scores designs based on engineering criteria
-function score = evaluate_design(rpm, E_stored, E_target, mass, RPM_min, RPM_max, RPM_ideal)
+function score = evaluate_design(rpm, E_stored, E_target, mass, total_cost, RPM_min, RPM_max, RPM_ideal)
     % Initialize score
     score = 0;
 
@@ -596,12 +602,21 @@ function score = evaluate_design(rpm, E_stored, E_target, mass, RPM_min, RPM_max
     end
     score = score - energy_error * 20;  % Penalty for energy mismatch
 
-    % Criterion 3: Prefer lighter designs (minimize mass)
-    % Normalize mass penalty (typical masses are 3-10 kg)
-    mass_penalty = (mass - 3) * 2;  % Penalize heavier designs
+    % Criterion 3: Minimize total cost (mass × cost_per_kg)
+    % Typical costs range from $8 (Al) to $450 (Ti)
+    % Normalize to a reasonable penalty scale
+    cost_penalty = (total_cost - 20) / 10;  % Baseline $20, scale down
+    score = score - cost_penalty;
+
+    % Criterion 4: Prefer lighter designs (minimize mass for performance)
+    % This is secondary to cost but still important
+    % Typical masses are 3-10 kg
+    mass_penalty = (mass - 3) * 1;  % Reduced weight vs cost
     score = score - mass_penalty;
 
-    % Criterion 4: Prefer designs closer to max dimensions (more robust)
-    % This is a minor factor, already captured in mass
+    % Note: Cost and mass are related but different objectives
+    % - Cost: Economic efficiency (material × cost_per_kg)
+    % - Mass: Performance (rotational inertia, vehicle weight)
+    % Cheap heavy material (steel) vs expensive light material (Ti) trade-off
 
 end
