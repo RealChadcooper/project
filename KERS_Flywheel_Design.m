@@ -105,7 +105,10 @@ for mat_idx = material_list
     iterations = [];
     iter = 0;
 
-    %% Iteration 1: Start with maximum dimensions
+    % Try different size combinations to explore design space
+    % A human would try: max size, reduced width, reduced radius, smaller overall
+
+    %% Iteration 1: Maximum dimensions
     r = r_max;
     w = W_max;
     m = rho * pi * r^2 * w;
@@ -120,10 +123,55 @@ for mat_idx = material_list
         iter, r, w, m, I, omega, rpm, E_stored/1000, total_cost);
     iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored, total_cost];
 
+    %% Iteration 2: Reduce width (lighter, higher RPM)
+    r = r_max;
+    w = W_max * 0.75;  % 75% width
+    m = rho * pi * r^2 * w;
+    I = 0.5 * m * r^2;
+    omega = sqrt(2 * E_target / I);
+    rpm = omega * 60 / (2*pi);
+    E_stored = 0.5 * I * omega^2;
+    total_cost = m * cost_per_kg;
+
+    iter = iter + 1;
+    fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | %7.2f\n', ...
+        iter, r, w, m, I, omega, rpm, E_stored/1000, total_cost);
+    iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored, total_cost];
+
+    %% Iteration 3: Reduce radius (different geometry)
+    r = r_max * 0.85;  % 85% radius
+    w = W_max;
+    m = rho * pi * r^2 * w;
+    I = 0.5 * m * r^2;
+    omega = sqrt(2 * E_target / I);
+    rpm = omega * 60 / (2*pi);
+    E_stored = 0.5 * I * omega^2;
+    total_cost = m * cost_per_kg;
+
+    iter = iter + 1;
+    fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | %7.2f\n', ...
+        iter, r, w, m, I, omega, rpm, E_stored/1000, total_cost);
+    iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored, total_cost];
+
+    %% Iteration 4: Both reduced (compromise)
+    r = r_max * 0.9;
+    w = W_max * 0.85;
+    m = rho * pi * r^2 * w;
+    I = 0.5 * m * r^2;
+    omega = sqrt(2 * E_target / I);
+    rpm = omega * 60 / (2*pi);
+    E_stored = 0.5 * I * omega^2;
+    total_cost = m * cost_per_kg;
+
+    iter = iter + 1;
+    fprintf('%4d | %9.4f | %9.4f | %8.2f | %9.5f | %12.1f | %8.0f | %9.2f   | %7.2f\n', ...
+        iter, r, w, m, I, omega, rpm, E_stored/1000, total_cost);
+    iterations = [iterations; iter, r, w, m, I, omega, rpm, E_stored, total_cost];
+
     fprintf('\n');
 
-    % Store results for this material
-    material_comparison = [material_comparison; mat_idx, r, w, m, rpm, total_cost];
+    % For comparison table, use iteration 1 (max dimensions) for this material
+    material_comparison = [material_comparison; mat_idx, iterations(1,2), iterations(1,3), iterations(1,4), iterations(1,7), iterations(1,9)];
 
 end  % End of material loop
 
