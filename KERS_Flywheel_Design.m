@@ -184,26 +184,23 @@ if evaluate_all_materials
     fprintf('\n========================================\n');
     fprintf('OPTIMAL DESIGN SELECTION\n');
     fprintf('========================================\n');
-    fprintf('Scoring based on three real project objectives:\n');
+    fprintf('Scoring based on two real project objectives:\n');
     fprintf('  1. Minimize Cost (project requirement)\n');
-    fprintf('  2. Minimize RPM (practical safety/feasibility)\n');
-    fprintf('  3. Minimize Mass (automotive application)\n');
-    fprintf('Each metric normalized 0-100, equal weight (1/3 each)\n\n');
+    fprintf('  2. Minimize Mass (automotive application)\n');
+    fprintf('Each metric normalized 0-100, equal weight (50%% each)\n\n');
 
     % Extract metrics for all designs
     all_costs = material_comparison(:, 10);
-    all_rpms = material_comparison(:, 8);
     all_masses = material_comparison(:, 5);
 
-    % Normalize metrics to 0-100 scale (lower is better for all)
+    % Normalize metrics to 0-100 scale (lower is better for both)
     % Score = 100 * (max - value) / (max - min)
     % This gives 100 to best (lowest) and 0 to worst (highest)
     cost_scores = 100 * (max(all_costs) - all_costs) / (max(all_costs) - min(all_costs));
-    rpm_scores = 100 * (max(all_rpms) - all_rpms) / (max(all_rpms) - min(all_rpms));
     mass_scores = 100 * (max(all_masses) - all_masses) / (max(all_masses) - min(all_masses));
 
     % Combined score (equal weights - no arbitrary bias)
-    combined_scores = (cost_scores + rpm_scores + mass_scores) / 3;
+    combined_scores = (cost_scores + mass_scores) / 2;
 
     % Find optimal design
     [best_score, best_idx] = max(combined_scores);
@@ -234,8 +231,8 @@ if evaluate_all_materials
 
     fprintf('\n--- OPTIMAL DESIGN SELECTED ---\n');
     fprintf('Material: %s, Iteration: %d\n', materials{material_choice}, iter_choice);
-    fprintf('Score Breakdown: Cost=%.1f, RPM=%.1f, Mass=%.1f → Combined=%.1f\n', ...
-        cost_scores(best_idx), rpm_scores(best_idx), mass_scores(best_idx), best_score);
+    fprintf('Score Breakdown: Cost=%.1f, Mass=%.1f → Combined=%.1f\n', ...
+        cost_scores(best_idx), mass_scores(best_idx), best_score);
     fprintf('========================================\n\n');
 else
     material_choice = single_material_choice;
