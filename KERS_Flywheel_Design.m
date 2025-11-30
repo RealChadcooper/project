@@ -87,7 +87,21 @@ material_comparison = [];  % Store results for each material
 
 % Common design parameters
 energy_tolerance = 0.05;
-safety_factor = 2.5;  % Safety factor for rotating machinery (typical 2-3)
+
+% Calculate safety factor based on application requirements
+% SF components (multiplicative approach used in machine design):
+SF_base = 1.5;           % Base factor for ductile materials with known properties
+SF_fatigue = 1.4;        % Cyclic loading factor (KERS cycles thousands of times)
+SF_critical = 1.2;       % Automotive safety-critical application
+% Total SF = SF_base × SF_fatigue × SF_critical
+safety_factor = SF_base * SF_fatigue * SF_critical;
+
+fprintf('--- Safety Factor Calculation ---\n');
+fprintf('Base SF (known material properties): %.1f\n', SF_base);
+fprintf('Fatigue multiplier (cyclic loading): %.1f\n', SF_fatigue);
+fprintf('Criticality multiplier (automotive): %.1f\n', SF_critical);
+fprintf('Total Safety Factor: %.2f\n', safety_factor);
+fprintf('Note: SF accounts for rotating stress, fatigue life, and failure consequence\n\n');
 
 % Loop through each material to evaluate
 for mat_idx = material_list
