@@ -48,6 +48,7 @@ v_initial = 80 / 3.6;   % Convert 80 km/h to m/s
 materials = {'Aluminum', 'Brass 60/40', 'Copper', 'Stainless Steel', 'Titanium', 'Zinc'};
 densities = [2712, 8520, 8940, 7500, 4500, 7135];  % kg/m^3
 costs = [2.80, 5, 11, 4, 100, 13];  % $/kg
+yield_strengths = [276e6, 200e6, 220e6, 505e6, 880e6, 200e6];  % Pa (yield strength)
 
 fprintf('=== KERS FLYWHEEL DESIGN ===\n\n');
 
@@ -84,11 +85,9 @@ global_best_rpm = 0;
 global_best_omega = 0;
 material_comparison = [];  % Store results for each material
 
-% Practical design constraints (same for all materials)
-RPM_min = 20000;
-RPM_max = 50000;
-RPM_ideal = 35000;
+% Common design parameters
 energy_tolerance = 0.05;
+safety_factor = 2.5;  % Safety factor for rotating machinery (typical 2-3)
 
 % Loop through each material to evaluate
 for mat_idx = material_list
@@ -96,10 +95,28 @@ for mat_idx = material_list
     % Set material properties for this iteration
     rho = densities(mat_idx);
     cost_per_kg = costs(mat_idx);
+    sigma_yield = yield_strengths(mat_idx);
+
+    % Calculate material-specific RPM limits based on centrifugal stress
+    % For a rotating disk: sigma_max = rho * omega^2 * r^2
+    % Rearranging: omega_max = sqrt(sigma_yield / (rho * r^2))
+    % Apply safety factor and convert to RPM
+    omega_max_safe = sqrt(sigma_yield / (safety_factor * rho * r_max^2));
+    RPM_max = omega_max_safe * 60 / (2*pi);
+
+    % Set practical limits
+    % Minimum RPM: Low enough to be achievable, but high enough for reasonable energy storage
+    RPM_min = max(15000, 0.3 * RPM_max);  % At least 15k RPM or 30% of max
+
+    % Ideal RPM: Target 65% of maximum safe speed (good balance of energy and longevity)
+    RPM_ideal = 0.65 * RPM_max;
 
     fprintf('\n========================================\n');
     fprintf('EVALUATING: %s\n', materials{mat_idx});
     fprintf('Density: %.0f kg/m^3, Cost: $%.2f/kg\n', rho, cost_per_kg);
+    fprintf('Yield Strength: %.0f MPa\n', sigma_yield/1e6);
+    fprintf('Max Safe RPM (with SF=%.1f): %.0f RPM\n', safety_factor, RPM_max);
+    fprintf('Ideal Operating RPM: %.0f RPM (%.0f%% of max)\n', RPM_ideal, 65);
     fprintf('========================================\n\n');
 
 % For a solid disk: I = (1/2) * m * r^2 = (1/2) * (rho * pi * r^2 * w) * r^2
